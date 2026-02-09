@@ -1,9 +1,6 @@
 
 # iNB – Three‑tier IaaS on Azure with Load Balancer
 
-This README describes the **production‑ready IaaS deployment** for the Indian Net Bank (iNB) online banking case study using a classic **Web / App / Data** three‑tier architecture on **Microsoft Azure**. It focuses on high availability, security, and operational excellence while keeping a close mapping to the functional requirements of the iNB system.
-
-> **Scope**: This file covers only the **Three‑tier IaaS on Azure with Load Balancer** option.
 
 ---
 
