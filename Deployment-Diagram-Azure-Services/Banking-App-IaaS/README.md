@@ -152,6 +152,3 @@ Implement using **Azure Functions (Timer/Queue)** or a dedicated **Worker VM** i
 
 ---
 
-## 15. License
-
-This architecture guide is provided for educational purposes as part of the iNB case study.
