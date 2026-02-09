@@ -11,49 +11,10 @@
 - **Data tier**: SQL Server on Azure VMs with **Always On Availability Groups** (or Azure SQL Managed Instance as an alternative), deployed in a dedicated subnet with no public exposure.
 - **Cross‑cutting**: Azure Key Vault (secrets), Azure Cache for Redis (session/cache), Azure Storage (blobs for cheque slips and queues for background jobs), Azure Monitor/Application Insights, Azure Bastion for secure admin access.
 
----
-
-## 2. Deployment Diagram (Mermaid)
-
-```mermaid
-graph TD
-  A[Internet Users] --> B[WAF: Azure Front Door or App Gateway]
-  B --> C[Azure Load Balancer (Public)]
-  C --> W1[Web VMSS - Instance 1]
-  C --> W2[Web VMSS - Instance 2]
-  W1 --> ILB[Azure Load Balancer (Internal)]
-  W2 --> ILB
-  ILB --> A1[App VMSS - Instance 1]
-  ILB --> A2[App VMSS - Instance 2]
-  A1 -->|TDS/1433| D1[(SQL Server AG - DB VM 1)]
-  A2 -->|TDS/1433| D2[(SQL Server AG - DB VM 2)]
-  A1 --> R[Azure Cache for Redis]
-  A2 --> R
-  A1 --> S[Azure Storage (Blob/Queue)]
-  A2 --> S
-  W1 -->|MSI| K[Azure Key Vault]
-  W2 -->|MSI| K
-  A1 -->|MSI| K
-  A2 -->|MSI| K
-  subgraph Network
-    B
-    C
-    W1
-    W2
-    ILB
-    A1
-    A2
-    D1
-    D2
-    R
-    S
-    K
-  end
-```
 
 ---
 
-## 3. Virtual Network & Subnets
+## 2. Virtual Network & Subnets
 
 - **VNet**: `vnet-inb-prod`
 - **Subnets**:
