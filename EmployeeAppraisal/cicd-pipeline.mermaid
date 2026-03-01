@@ -35,7 +35,7 @@ flowchart TD
         D2[Setup .NET 8 SDK\ndotnet restore]
         D3[Build Solution\ndotnet build --configuration Release]
         D4[Unit Tests\ndotnet test + xUnit]
-        D5{"All Tests\nGreen?"]
+        D5["All Tests\nGreen?"]
         D6[Integration Tests\nTestcontainers + SQL]
         D7[SAST Scan\nSonarCloud / Checkmarx]
         D8[Publish Function App\ndotnet publish]
