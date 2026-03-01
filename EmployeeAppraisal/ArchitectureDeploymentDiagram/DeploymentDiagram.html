@@ -1,0 +1,98 @@
+graph TB
+    subgraph Users["👥 End Users (1000 Employees)"]
+        EU[Corporate Browsers / Devices]
+    end
+
+    subgraph CICD["🔄 Azure DevOps – CI/CD Pipeline"]
+        direction LR
+        REPO[Azure Repos\nGit Source Control]
+        PIPE[Azure Pipelines\nBuild & Release]
+        REPO --> PIPE
+    end
+
+    subgraph CDN_LAYER["🌐 Delivery Layer"]
+        AFD[Azure Front Door\nGlobal CDN + WAF + HTTPS]
+    end
+
+    subgraph FRONTEND["⚛️ Frontend – Azure Static Web Apps"]
+        SWA[Azure Static Web Apps\nReact + Vite\nHTTPS Enforced\nBuilt-in Auth Routing]
+    end
+
+    subgraph BACKEND["⚙️ Backend – Azure Functions"]
+        AF[Azure Functions\n.NET 8 Isolated Worker\nHTTP Triggers\nREST API Endpoints]
+        AF2[Azure Functions\n.NET 8\nService Bus Triggers\nAsync Processors]
+    end
+
+    subgraph DATA["🗄️ Data Layer"]
+        SQLDB[(Azure SQL Database\nPremium Tier\nGeo-Redundant\nAuto-Failover)]
+        CACHE[Azure Cache\nfor Redis\nSession & Query Cache]
+    end
+
+    subgraph MESSAGING["📨 Messaging – Azure Service Bus"]
+        SB[Azure Service Bus\nNamespace\nTopics & Subscriptions]
+        SBQ[Dead Letter Queue\n& Retry Policy]
+        SB --> SBQ
+    end
+
+    subgraph OBSERVABILITY["📊 Insights & Monitoring"]
+        AI[Azure Application Insights\nPerformance & Exceptions]
+        LAW[Log Analytics Workspace\nCentralised Log Aggregation]
+        MON[Azure Monitor\nAlerts & Dashboards]
+        AI --> LAW
+        MON --> LAW
+    end
+
+    subgraph SECURITY["🔐 Security & Identity"]
+        AAD[Microsoft Entra ID\nAzure AD – SSO / OAuth2]
+        KV[Azure Key Vault\nSecrets & Connection Strings]
+    end
+
+    %% User Flow
+    EU -->|HTTPS| AFD
+    AFD -->|Route Static Assets| SWA
+    AFD -->|Route API Calls /api/*| AF
+
+    %% CI/CD Deployments
+    PIPE -->|Deploy Static Build| SWA
+    PIPE -->|Deploy Function App| AF
+    PIPE -->|Deploy Function App| AF2
+
+    %% Backend → Data
+    AF -->|Query / Write| SQLDB
+    AF -->|Cache Reads| CACHE
+    AF2 -->|Write Results| SQLDB
+
+    %% Messaging Flow
+    AF -->|Publish Events| SB
+    SB -->|Trigger| AF2
+
+    %% Observability via Service Bus
+    AF -->|Telemetry & Logs| AI
+    AF2 -->|Telemetry & Logs| AI
+    SWA -->|Client-side Telemetry| AI
+    SB -->|Metrics & Diagnostics| MON
+
+    %% Security
+    EU -->|Authenticate| AAD
+    AAD -->|Token Validation| SWA
+    AAD -->|Token Validation| AF
+    AF -->|Fetch Secrets| KV
+    AF2 -->|Fetch Secrets| KV
+
+    %% Styling
+    classDef azure fill:#0078D4,stroke:#005A9E,color:#fff
+    classDef frontend fill:#61DAFB,stroke:#21A1C4,color:#000
+    classDef backend fill:#512BD4,stroke:#3A1FA0,color:#fff
+    classDef data fill:#00BCF2,stroke:#0078A8,color:#000
+    classDef security fill:#D83B01,stroke:#A02A00,color:#fff
+    classDef cicd fill:#008272,stroke:#005A50,color:#fff
+    classDef monitor fill:#E8A202,stroke:#B07A00,color:#000
+    classDef msg fill:#00B294,stroke:#007A65,color:#fff
+
+    class AFD,SWA azure
+    class AF,AF2 backend
+    class SQLDB,CACHE data
+    class AAD,KV security
+    class REPO,PIPE cicd
+    class AI,LAW,MON monitor
+    class SB,SBQ msg
