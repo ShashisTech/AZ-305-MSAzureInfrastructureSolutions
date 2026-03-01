@@ -1,0 +1,163 @@
+sequenceDiagram
+    autonumber
+
+    actor User as 👤 User (Any Role)
+    participant UI as ⚛️ React+Vite SPA
+    participant IS as InputSanitizer
+    participant VE as ValidationEngine
+    participant AC as AuthController
+    participant AS as AuthService
+    participant LM as LockoutManager
+    participant ALP as AccountLockoutPolicy
+    participant LT as LoginAttemptTracker
+    participant LAR as LoginAttemptRepository
+    participant PH as PasswordHasher
+    participant UAR as UserAccountRepository
+    participant AAD as Microsoft Entra ID
+    participant KV as Azure Key Vault
+    participant AL as AuditLogger
+    participant ATR as AuditTrailRepository
+    participant AI as Application Insights
+    participant NS as NotificationService
+
+    rect rgb(10, 30, 60)
+        Note over User, NS: 🔐 STEP 1 · USER INPUT & CLIENT-SIDE VALIDATION
+
+        User->>UI: Enter Username & Password
+        UI->>IS: Sanitize(username, password)
+        IS-->>UI: sanitizedCredentials
+        UI->>VE: Validate(LoginRequestDto)
+        VE-->>UI: ValidationResult
+
+        alt Client Validation Fails
+            UI-->>User: ❌ Show inline field errors\n(empty fields / invalid format)
+        else Client Validation Passes
+            UI->>UI: Build LoginRequestDto\n{ username, password }
+        end
+    end
+
+    rect rgb(10, 45, 30)
+        Note over User, NS: 🔐 STEP 2 · API REQUEST & USER LOOKUP
+
+        UI->>AC: POST /api/auth/login\n(LoginRequestDto · HTTPS)
+        AC->>VE: Validate(LoginRequestDto)
+        VE-->>AC: ValidationResult
+
+        alt Server Validation Fails
+            AC-->>UI: 400 Bad Request\nValidationErrorDto
+            UI-->>User: ❌ Invalid request payload
+        else Server Validation Passes
+            AC->>AS: Login(LoginRequestDto)
+            AS->>UAR: FindByUsername(username)
+
+            alt User Not Found
+                UAR-->>AS: null
+                AS->>AI: TrackEvent("LoginFailed · UserNotFound")
+                AS-->>AC: InvalidCredentialsException
+                AC-->>UI: 401 Unauthorised\n"Invalid username or password"
+                UI-->>User: ❌ Invalid credentials
+            else User Found
+                UAR-->>AS: UserAccount
+            end
+        end
+    end
+
+    rect rgb(45, 20, 10)
+        Note over User, NS: 🔐 STEP 3 · LOCKOUT CHECK
+
+        AS->>LM: IsLocked(UserAccount)
+        LM->>LT: GetFailedCount(userId)
+        LT->>LAR: CountFailed(userId)
+        LAR-->>LT: failedCount
+        LT-->>LM: failedCount
+        LM->>ALP: ShouldLock(failedCount)
+        ALP-->>LM: isLocked (true/false)
+        LM-->>AS: isLocked
+
+        alt Account is Locked
+            AS->>AI: TrackEvent("LoginFailed · AccountLocked", userId)
+            AS-->>AC: AccountLockedException\n(remainingLockoutMinutes)
+            AC-->>UI: 423 Locked\n"Account locked. Retry after X mins."
+            UI-->>User: ❌ Account locked\nCountdown timer displayed
+        end
+    end
+
+    rect rgb(30, 15, 50)
+        Note over User, NS: 🔐 STEP 4 · CREDENTIAL VERIFICATION
+
+        AS->>PH: Verify(inputPassword, storedHash)
+        PH-->>AS: isValid (true/false)
+
+        alt Password Invalid
+            AS->>LT: Record(userId, success=false)
+            LT->>LAR: RecordAttempt(userId, failed)
+            AS->>LM: CheckAndLock(UserAccount)
+            LM->>ALP: ShouldLock(newFailedCount)
+
+            alt Lockout Threshold Reached
+                ALP-->>LM: shouldLock=true
+                LM->>UAR: Save(UserAccount · IsLocked=true)
+                AS->>NS: SendAccountLockedAlert(userId)
+                NS-->>User: 📧 Account locked notification email
+                AS->>AI: TrackEvent("AccountAutoLocked", userId)
+                AS-->>AC: AccountLockedException
+                AC-->>UI: 423 Locked
+                UI-->>User: ❌ Too many attempts.\nAccount is now locked.
+            else Threshold Not Reached
+                ALP-->>LM: shouldLock=false
+                AS->>AI: TrackEvent("LoginFailed · BadPassword", userId)
+                AS-->>AC: InvalidCredentialsException\n(remainingAttempts)
+                AC-->>UI: 401 Unauthorised\n"Invalid credentials. X attempts remaining."
+                UI-->>User: ❌ Wrong password.\nX attempts remaining.
+            end
+        end
+    end
+
+    rect rgb(10, 45, 45)
+        Note over User, NS: 🔐 STEP 5 · ENTRA ID TOKEN ISSUANCE
+
+        AS->>AAD: ValidateUser(userId) &\nRequestOAuth2Token(claims, roles)
+        AAD->>AAD: Resolve roles & permissions\n(Employee / Manager / HR)
+        AAD-->>AS: JWT AccessToken + RefreshToken\n(exp=15m / 7d)
+
+        AS->>KV: FetchSigningSecret("jwt-signing-key")
+        KV-->>AS: signingSecret
+
+        AS->>AS: Sign & package TokenResult\n{ accessToken, refreshToken, expiresIn, roles }
+    end
+
+    rect rgb(40, 40, 10)
+        Note over User, NS: 🔐 STEP 6 · SUCCESSFUL LOGIN HOUSEKEEPING
+
+        AS->>LT: Reset(userId)
+        LT->>LAR: ClearAttempts(userId)
+        AS->>UAR: Save(UserAccount · LastLogin=now, FailedAttempts=0)
+        AS->>AL: Log("LoginSuccess", userId, IPAddress, timestamp)
+        AL->>ATR: Save(AuditTrail)
+        AS->>AI: TrackEvent("LoginSuccess", userId, role)
+        AS-->>AC: TokenResult
+        AC-->>UI: 200 OK · TokenResult
+    end
+
+    rect rgb(10, 10, 50)
+        Note over User, NS: 🔐 STEP 7 · CLIENT TOKEN STORAGE & SESSION INIT
+
+        UI->>UI: Store JWT in memory\n(React state / context)\nNOT localStorage
+        UI->>UI: Decode JWT payload\nExtract: userId, roles, expiresIn
+        UI->>UI: Schedule silent token refresh\n(at 80% of expiry = ~12 mins)
+        UI-->>User: ✅ Login successful\nRedirecting to role dashboard...
+    end
+
+    rect rgb(10, 40, 20)
+        Note over User, NS: 🔐 STEP 8 · SILENT TOKEN REFRESH (Background)
+
+        UI->>AC: POST /api/auth/refresh\n(RefreshToken · httpOnly cookie)
+        AC->>AS: RefreshToken(refreshToken)
+        AS->>AAD: ValidateRefreshToken(refreshToken)
+        AAD-->>AS: New JWT AccessToken
+        AS->>KV: FetchSigningSecret("jwt-signing-key")
+        KV-->>AS: signingSecret
+        AS-->>AC: New TokenResult
+        AC-->>UI: 200 OK · New AccessToken
+        UI->>UI: Replace in-memory token\nReset refresh timer
+    end
