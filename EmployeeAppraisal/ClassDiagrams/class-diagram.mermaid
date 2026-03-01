@@ -1,0 +1,524 @@
+classDiagram
+    %% ─────────────────────────────────────────
+    %% VALUE OBJECTS
+    %% ─────────────────────────────────────────
+    class PersonalInfo {
+        +string FirstName
+        +string LastName
+        +string Email
+        +string Phone
+        +Date DateOfBirth
+    }
+    class AppraisalStatus {
+        +string StatusCode
+        +string Label
+        +Date EffectiveDate
+        +bool IsFinal()
+    }
+    class SlaMetrics {
+        +int DeadlineDays
+        +Date DueDate
+        +bool IsBreached()
+        +int RemainingDays()
+    }
+
+    %% ─────────────────────────────────────────
+    %% DOMAIN ENTITIES
+    %% ─────────────────────────────────────────
+    class UserAccount {
+        +Guid Id
+        +string Username
+        +string PasswordHash
+        +bool IsLocked
+        +int FailedAttempts
+        +DateTime LastLogin
+        +PersonalInfo PersonalInfo
+        +List~Role~ Roles
+        +Lock()
+        +Unlock()
+        +AddRole(Role)
+    }
+    class Role {
+        +Guid Id
+        +string Name
+        +string Description
+        +List~Permission~ Permissions
+        +HasPermission(string) bool
+    }
+    class Permission {
+        +Guid Id
+        +string Resource
+        +string Action
+        +string Scope
+    }
+    class Employee {
+        +Guid Id
+        +string EmployeeCode
+        +PersonalInfo PersonalInfo
+        +Guid DepartmentId
+        +Guid UserAccountId
+        +string Designation
+        +Date JoiningDate
+        +GetCurrentAppraisal() Appraisal
+    }
+    class Department {
+        +Guid Id
+        +string Name
+        +string Code
+        +Guid ManagerId
+        +List~Employee~ Employees
+    }
+    class AppraisalCycle {
+        +Guid Id
+        +string CycleName
+        +Date StartDate
+        +Date EndDate
+        +bool IsActive
+        +SlaMetrics Sla
+        +Open()
+        +Close()
+    }
+    class Appraisal {
+        +Guid Id
+        +Guid EmployeeId
+        +Guid CycleId
+        +AppraisalStatus Status
+        +decimal OverallScore
+        +DateTime CreatedAt
+        +DateTime UpdatedAt
+        +Submit()
+        +Approve()
+        +Reject()
+    }
+    class ManagerComments {
+        +Guid Id
+        +Guid AppraisalId
+        +Guid ManagerId
+        +string Comments
+        +decimal RatingScore
+        +DateTime CommentedAt
+    }
+    class EmployeeComments {
+        +Guid Id
+        +Guid AppraisalId
+        +Guid EmployeeId
+        +string SelfAssessment
+        +DateTime SubmittedAt
+    }
+    class CTC {
+        +Guid Id
+        +Guid EmployeeId
+        +Guid AppraisalId
+        +decimal CurrentCTC
+        +decimal RevisedCTC
+        +decimal HikePercentage
+        +Date EffectiveDate
+        +CalculateHike() decimal
+    }
+    class PromotionDecision {
+        +Guid Id
+        +Guid AppraisalId
+        +Guid EmployeeId
+        +bool IsPromoted
+        +string NewDesignation
+        +string Justification
+        +DateTime DecidedAt
+    }
+    class Assignment {
+        +Guid Id
+        +Guid AppraisalId
+        +Guid AssigneeId
+        +Guid AssignedById
+        +string AssigneeRole
+        +DateTime AssignedAt
+        +Date Deadline
+    }
+    class AuditTrail {
+        +Guid Id
+        +Guid EntityId
+        +string EntityType
+        +string Action
+        +string ChangedBy
+        +string OldValues
+        +string NewValues
+        +DateTime Timestamp
+    }
+
+    %% ─────────────────────────────────────────
+    %% REPOSITORIES
+    %% ─────────────────────────────────────────
+    class UserAccountRepository {
+        +FindById(Guid) UserAccount
+        +FindByUsername(string) UserAccount
+        +Save(UserAccount)
+        +Delete(Guid)
+    }
+    class RoleRepository {
+        +FindById(Guid) Role
+        +FindByName(string) Role
+        +GetAll() List~Role~
+    }
+    class EmployeeRepository {
+        +FindById(Guid) Employee
+        +FindByDepartment(Guid) List~Employee~
+        +Search(string) List~Employee~
+        +Save(Employee)
+    }
+    class DepartmentRepository {
+        +FindById(Guid) Department
+        +GetAll() List~Department~
+        +Save(Department)
+    }
+    class AppraisalRepository {
+        +FindById(Guid) Appraisal
+        +FindByCycle(Guid) List~Appraisal~
+        +FindByEmployee(Guid) List~Appraisal~
+        +Save(Appraisal)
+    }
+    class ManagerCommentsRepository {
+        +FindByAppraisal(Guid) ManagerComments
+        +Save(ManagerComments)
+    }
+    class EmployeeCommentsRepository {
+        +FindByAppraisal(Guid) EmployeeComments
+        +Save(EmployeeComments)
+    }
+    class CtcRepository {
+        +FindByAppraisal(Guid) CTC
+        +FindByEmployee(Guid) List~CTC~
+        +Save(CTC)
+    }
+    class PromotionDecisionRepository {
+        +FindByAppraisal(Guid) PromotionDecision
+        +Save(PromotionDecision)
+    }
+    class AssignmentRepository {
+        +FindByAppraisal(Guid) List~Assignment~
+        +FindByAssignee(Guid) List~Assignment~
+        +Save(Assignment)
+    }
+    class AuditTrailRepository {
+        +FindByEntity(Guid, string) List~AuditTrail~
+        +Save(AuditTrail)
+        +GetRecent(int) List~AuditTrail~
+    }
+    class LoginAttemptRepository {
+        +RecordAttempt(Guid, bool)
+        +CountFailed(Guid) int
+        +ClearAttempts(Guid)
+    }
+    class UnitOfWork {
+        +BeginTransaction()
+        +Commit()
+        +Rollback()
+        +UserAccounts UserAccountRepository
+        +Employees EmployeeRepository
+        +Appraisals AppraisalRepository
+        +Assignments AssignmentRepository
+    }
+
+    %% ─────────────────────────────────────────
+    %% APPLICATION SERVICES
+    %% ─────────────────────────────────────────
+    class AuthService {
+        -UserAccountRepository _userRepo
+        -PasswordHasher _hasher
+        -LockoutManager _lockout
+        -LoginAttemptTracker _tracker
+        +Login(LoginRequestDto) TokenResult
+        +Logout(Guid)
+        +RefreshToken(string) TokenResult
+        +ChangePassword(Guid, string)
+    }
+    class EmployeeProfileService {
+        -EmployeeRepository _empRepo
+        -DepartmentRepository _deptRepo
+        +GetProfile(Guid) PersonalInfoDto
+        +UpdateProfile(Guid, PersonalInfoDto)
+        +GetDepartmentTree() List~Department~
+    }
+    class AppraisalAssignmentService {
+        -AssignmentRepository _assignRepo
+        -AppraisalRepository _appraisalRepo
+        -NotificationService _notify
+        +Assign(Guid, Guid, string) Assignment
+        +Reassign(Guid, Guid)
+        +GetPendingAssignments(Guid) List~Assignment~
+    }
+    class AppraisalService {
+        -AppraisalRepository _appraisalRepo
+        -WorkflowStateTracker _workflow
+        -ValidationEngine _validator
+        -AuditLogger _audit
+        +CreateAppraisal(Guid, Guid) Appraisal
+        +SubmitAppraisal(Guid)
+        +ApproveAppraisal(Guid)
+        +GetAppraisalSummary(Guid) AppraisalSummaryDto
+    }
+    class NavigationService {
+        -AuthorizationPolicy _authzPolicy
+        +GetAllowedRoutes(Guid) List~string~
+        +CanAccess(Guid, string) bool
+    }
+    class UiLayoutService {
+        -LayoutTemplateProvider _templates
+        +GetLayout(string) Layout
+        +GetMenuItems(Guid) List~MenuItem~
+    }
+    class ReportingService {
+        -AppraisalRepository _appraisalRepo
+        -CtcRepository _ctcRepo
+        -CachingProvider _cache
+        +GetAppraisalReport(Guid) AppraisalSummaryDto
+        +GetCTCReport(Guid) CtcInfoDto
+        +GetDepartmentSummary(Guid) List~AppraisalSummaryDto~
+    }
+    class NotificationService {
+        -NotificationPolicy _policy
+        +SendDeadlineReminder(Guid)
+        +SendStatusChange(Guid, string)
+        +SendPromotionNotice(Guid)
+    }
+
+    %% ─────────────────────────────────────────
+    %% PRESENTATION / API CONTROLLERS
+    %% ─────────────────────────────────────────
+    class AuthController {
+        -AuthService _authService
+        +Login(LoginRequestDto) IActionResult
+        +Logout() IActionResult
+        +RefreshToken() IActionResult
+    }
+    class HRController {
+        -EmployeeProfileService _profileSvc
+        -ReportingService _reportSvc
+        +GetEmployee(Guid) IActionResult
+        +UpdateEmployee(PersonalInfoDto) IActionResult
+        +GetReports() IActionResult
+    }
+    class AppraiserController {
+        -AppraisalService _appraisalSvc
+        -AppraisalAssignmentService _assignSvc
+        +GetAssignedAppraisals() IActionResult
+        +SubmitManagerComments(ManagerCommentsDto) IActionResult
+        +ApproveAppraisal(Guid) IActionResult
+    }
+    class AppraiseeController {
+        -AppraisalService _appraisalSvc
+        +GetMyAppraisal() IActionResult
+        +SubmitSelfAssessment(EmployeeCommentsDto) IActionResult
+        +GetUpcoming() IActionResult
+    }
+    class AppraisalController {
+        -AppraisalService _appraisalSvc
+        -ReportingService _reportSvc
+        +GetCycle(Guid) IActionResult
+        +GetSummary(Guid) IActionResult
+        +GetCTCInfo(Guid) IActionResult
+        +GetPromotion(Guid) IActionResult
+    }
+    class LayoutController {
+        -UiLayoutService _layoutSvc
+        -NavigationService _navSvc
+        +GetLayout() IActionResult
+        +GetNavMenu() IActionResult
+    }
+
+    %% ─────────────────────────────────────────
+    %% DTOs / VIEW MODELS
+    %% ─────────────────────────────────────────
+    class LoginRequestDto {
+        +string Username
+        +string Password
+    }
+    class PersonalInfoDto {
+        +string FirstName
+        +string LastName
+        +string Email
+        +string Phone
+        +string Designation
+        +string Department
+    }
+    class UpcomingAppraisalDto {
+        +Guid AppraisalId
+        +string CycleName
+        +Date Deadline
+        +string Status
+    }
+    class AppraisalSummaryDto {
+        +Guid AppraisalId
+        +string EmployeeName
+        +decimal OverallScore
+        +string Status
+        +bool IsPromoted
+        +decimal HikePercent
+    }
+    class ManagerCommentsDto {
+        +Guid AppraisalId
+        +string Comments
+        +decimal Score
+    }
+    class EmployeeCommentsDto {
+        +Guid AppraisalId
+        +string SelfAssessment
+    }
+    class CtcInfoDto {
+        +Guid AppraisalId
+        +decimal CurrentCTC
+        +decimal RevisedCTC
+        +decimal HikePercent
+        +Date EffectiveDate
+    }
+    class PromotionDecisionDto {
+        +Guid AppraisalId
+        +bool IsPromoted
+        +string NewDesignation
+        +string Justification
+    }
+
+    %% ─────────────────────────────────────────
+    %% CROSS-CUTTING CONCERNS
+    %% ─────────────────────────────────────────
+    class PasswordHasher {
+        +Hash(string) string
+        +Verify(string, string) bool
+    }
+    class AccountLockoutPolicy {
+        +MaxAttempts int
+        +LockoutDurationMinutes int
+        +ShouldLock(int) bool
+    }
+    class LoginAttemptTracker {
+        -LoginAttemptRepository _repo
+        +Record(Guid, bool)
+        +GetFailedCount(Guid) int
+        +Reset(Guid)
+    }
+    class LockoutManager {
+        -AccountLockoutPolicy _policy
+        -LoginAttemptTracker _tracker
+        +CheckAndLock(UserAccount)
+        +IsLocked(UserAccount) bool
+    }
+    class AuthorizationPolicy {
+        +Evaluate(Guid, string) bool
+        +GetPolicies() List~string~
+    }
+    class ValidationEngine {
+        +Validate~T~(T) ValidationResult
+        +IsValid~T~(T) bool
+    }
+    class AuditLogger {
+        -AuditTrailRepository _auditRepo
+        +Log(string, Guid, string, string, string)
+    }
+    class ExceptionHandler {
+        +Handle(Exception) ErrorResponse
+        +LogException(Exception)
+    }
+    class InputSanitizer {
+        +Sanitize(string) string
+        +SanitizeDto~T~(T) T
+    }
+    class CachingProvider {
+        +Get~T~(string) T
+        +Set~T~(string, T, int)
+        +Invalidate(string)
+    }
+    class ConfigurationProvider {
+        +Get(string) string
+        +GetSection~T~(string) T
+    }
+    class NotificationPolicy {
+        +ShouldNotify(string, Guid) bool
+        +GetTemplate(string) string
+    }
+    class LayoutTemplateProvider {
+        +GetTemplate(string) LayoutTemplate
+        +GetRoleTemplate(string) LayoutTemplate
+    }
+    class WorkflowStateTracker {
+        +GetNextState(string) string
+        +IsTransitionAllowed(string, string) bool
+        +GetAllStates() List~string~
+    }
+
+    %% ─────────────────────────────────────────
+    %% RELATIONSHIPS – ENTITIES
+    %% ─────────────────────────────────────────
+    UserAccount "1" *-- "1" PersonalInfo : has
+    UserAccount "1" *-- "*" Role : assigned
+    Role "1" *-- "*" Permission : grants
+    Employee "1" *-- "1" PersonalInfo : has
+    Employee "*" --> "1" Department : belongs to
+    Employee "1" --> "1" UserAccount : linked to
+    Department "1" --> "1" Employee : managed by
+    Appraisal "*" --> "1" Employee : for
+    Appraisal "*" --> "1" AppraisalCycle : belongs to
+    Appraisal "1" *-- "1" AppraisalStatus : has
+    AppraisalCycle "1" *-- "1" SlaMetrics : governed by
+    ManagerComments "*" --> "1" Appraisal : annotates
+    EmployeeComments "*" --> "1" Appraisal : annotates
+    CTC "1" --> "1" Appraisal : associated with
+    PromotionDecision "1" --> "1" Appraisal : outcome of
+    Assignment "*" --> "1" Appraisal : assigned to
+    AuditTrail ..> Appraisal : tracks
+    AuditTrail ..> Employee : tracks
+
+    %% ─────────────────────────────────────────
+    %% RELATIONSHIPS – SERVICES → REPOS
+    %% ─────────────────────────────────────────
+    AuthService --> UserAccountRepository : uses
+    AuthService --> PasswordHasher : uses
+    AuthService --> LockoutManager : uses
+    AuthService --> LoginAttemptTracker : uses
+    EmployeeProfileService --> EmployeeRepository : uses
+    EmployeeProfileService --> DepartmentRepository : uses
+    AppraisalAssignmentService --> AssignmentRepository : uses
+    AppraisalAssignmentService --> AppraisalRepository : uses
+    AppraisalAssignmentService --> NotificationService : uses
+    AppraisalService --> AppraisalRepository : uses
+    AppraisalService --> WorkflowStateTracker : uses
+    AppraisalService --> ValidationEngine : uses
+    AppraisalService --> AuditLogger : uses
+    ReportingService --> AppraisalRepository : uses
+    ReportingService --> CtcRepository : uses
+    ReportingService --> CachingProvider : uses
+    NavigationService --> AuthorizationPolicy : uses
+    UiLayoutService --> LayoutTemplateProvider : uses
+    NotificationService --> NotificationPolicy : uses
+    AuditLogger --> AuditTrailRepository : uses
+    LockoutManager --> AccountLockoutPolicy : uses
+    LockoutManager --> LoginAttemptTracker : uses
+    LoginAttemptTracker --> LoginAttemptRepository : uses
+    UnitOfWork --> UserAccountRepository : aggregates
+    UnitOfWork --> EmployeeRepository : aggregates
+    UnitOfWork --> AppraisalRepository : aggregates
+    UnitOfWork --> AssignmentRepository : aggregates
+
+    %% ─────────────────────────────────────────
+    %% RELATIONSHIPS – CONTROLLERS → SERVICES
+    %% ─────────────────────────────────────────
+    AuthController --> AuthService : calls
+    HRController --> EmployeeProfileService : calls
+    HRController --> ReportingService : calls
+    AppraiserController --> AppraisalService : calls
+    AppraiserController --> AppraisalAssignmentService : calls
+    AppraiseeController --> AppraisalService : calls
+    AppraisalController --> AppraisalService : calls
+    AppraisalController --> ReportingService : calls
+    LayoutController --> UiLayoutService : calls
+    LayoutController --> NavigationService : calls
+
+    %% ─────────────────────────────────────────
+    %% RELATIONSHIPS – CONTROLLERS → DTOs
+    %% ─────────────────────────────────────────
+    AuthController ..> LoginRequestDto : receives
+    HRController ..> PersonalInfoDto : receives/returns
+    AppraiserController ..> ManagerCommentsDto : receives
+    AppraiserController ..> AppraisalSummaryDto : returns
+    AppraiseeController ..> EmployeeCommentsDto : receives
+    AppraiseeController ..> UpcomingAppraisalDto : returns
+    AppraisalController ..> AppraisalSummaryDto : returns
+    AppraisalController ..> CtcInfoDto : returns
+    AppraisalController ..> PromotionDecisionDto : returns
