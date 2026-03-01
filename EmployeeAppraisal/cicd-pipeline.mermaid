@@ -1,0 +1,152 @@
+flowchart TD
+    subgraph DEV["🧑‍💻 Developer Workstation"]
+        A1[Write Code\nReact+Vite / .NET 8]
+        A2[Local Unit Tests]
+        A3[Git Commit & Push\nFeature Branch]
+        A1 --> A2 --> A3
+    end
+
+    subgraph PR["🔀 Pull Request Gate – Azure Repos"]
+        B1[Pull Request Created\nto main / release]
+        B2[Code Review\nPeer Approval Required]
+        B3{PR Checks\nPassed?}
+        B1 --> B2 --> B3
+    end
+
+    subgraph CI_FRONTEND["⚛️ CI Pipeline – Frontend · Azure Pipelines"]
+        direction TB
+        C1[Trigger: Push to main\nPath: /frontend/**]
+        C2[Install Node.js 20\nnpm ci]
+        C3[Lint · ESLint\nCode Quality Check]
+        C4[Unit Tests\nVitest + Coverage]
+        C5{Coverage\n≥ 80%?}
+        C6[Build Production Bundle\nvite build]
+        C7[SAST Scan\nSonarCloud / Checkmarx]
+        C8[Dependency Audit\nnpm audit --audit-level=high]
+        C9[Package Artifacts\nupload dist/ to pipeline]
+        C1 --> C2 --> C3 --> C4 --> C5
+        C5 -->|Yes| C6 --> C7 --> C8 --> C9
+        C5 -->|No| FAIL_FE[❌ Pipeline Fails\nNotify Dev]
+    end
+
+    subgraph CI_BACKEND["⚙️ CI Pipeline – Backend · Azure Pipelines"]
+        direction TB
+        D1[Trigger: Push to main\nPath: /backend/**]
+        D2[Setup .NET 8 SDK\ndotnet restore]
+        D3[Build Solution\ndotnet build --configuration Release]
+        D4[Unit Tests\ndotnet test + xUnit]
+        D5{All Tests\nGreen?]
+        D6[Integration Tests\nTestcontainers + SQL]
+        D7[SAST Scan\nSonarCloud / Checkmarx]
+        D8[Publish Function App\ndotnet publish]
+        D9[Package Artifact\nzip function app]
+        D1 --> D2 --> D3 --> D4 --> D5
+        D5 -->|Yes| D6 --> D7 --> D8 --> D9
+        D5 -->|No| FAIL_BE[❌ Pipeline Fails\nNotify Dev]
+    end
+
+    subgraph INFRA["🏗️ Infrastructure Pipeline – Bicep / Terraform"]
+        E1[Trigger: IaC changes\n/infra/** path]
+        E2[Validate Templates\nbicep build / tf validate]
+        E3[Security Scan\nCheckov / tfsec]
+        E4[Plan / What-If\nterraform plan]
+        E5{Manual\nApproval?}
+        E6[Apply Infrastructure\nterraform apply]
+        E1 --> E2 --> E3 --> E4 --> E5
+        E5 -->|Approved| E6
+        E5 -->|Rejected| FAIL_INFRA[❌ IaC Change Rejected]
+    end
+
+    subgraph CD_DEV["🚀 CD – Deploy to DEV Environment"]
+        F1[Download All Artifacts]
+        F2[Deploy Frontend\naz staticwebapp deploy\nDev Slot]
+        F3[Deploy Azure Functions\naz functionapp deploy\nDev Slot]
+        F4[Run DB Migrations\nEF Core / Flyway]
+        F5[Smoke Tests\nEndpoint Reachability]
+        F1 --> F2 --> F3 --> F4 --> F5
+    end
+
+    subgraph CD_QA["🧪 CD – Deploy to QA / Staging Environment"]
+        G1[Download All Artifacts]
+        G2[Deploy Frontend\naz staticwebapp deploy\nStaging Slot]
+        G3[Deploy Azure Functions\nStaging Slot]
+        G4[Run DB Migrations]
+        G5[Integration Tests\nPlaywright E2E]
+        G6[Performance Tests\nk6 – 1000 Users Load]
+        G7[DAST Scan\nOWASP ZAP]
+        G8{All QA Gates\nPassed?}
+        G1 --> G2 --> G3 --> G4 --> G5 --> G6 --> G7 --> G8
+        G8 -->|No| FAIL_QA[❌ QA Failed\nRaise Bug · Notify Team]
+    end
+
+    subgraph APPROVAL["🔐 Production Release Gate"]
+        H1[Release Notes\nAuto-generated Changelog]
+        H2[Security Sign-off\nSecurity Champion Review]
+        H3[Change Advisory Board\nCAB Approval]
+        H4{All Approvals\nGranted?}
+        H1 --> H2 --> H3 --> H4
+    end
+
+    subgraph CD_PROD["🌐 CD – Deploy to Production · Azure"]
+        I1[Blue-Green / Slot Swap\nWarm-up Prod Slot]
+        I2[Deploy Frontend\nAzure Static Web Apps\nProduction]
+        I3[Deploy .NET 8 Functions\nAzure Functions\nProduction]
+        I4[Run DB Migrations\nZero-Downtime]
+        I5[Slot Swap\nStaging → Production]
+        I6[Flush Azure CDN Cache\nFront Door Cache Purge]
+        I7[Smoke Tests\nProduction Endpoints]
+        I8{Smoke Tests\nPassed?}
+        I1 --> I2 --> I3 --> I4 --> I5 --> I6 --> I7 --> I8
+    end
+
+    subgraph MONITOR["📊 Post-Deploy Monitoring"]
+        J1[Azure Application Insights\nError Rate & Latency]
+        J2[Azure Monitor Alerts\nCPU · Memory · SQL DTU]
+        J3[Service Bus Metrics\nDead-Letter Monitoring]
+        J4{Anomaly\nDetected?}
+        J5[Auto Rollback\nSwap Slot Back]
+        J6[Notify On-Call\nPagerDuty / Teams]
+        J7[✅ Deployment\nSuccessful]
+        J1 & J2 & J3 --> J4
+        J4 -->|Yes| J5 --> J6
+        J4 -->|No| J7
+    end
+
+    %% ─── MAIN FLOW CONNECTIONS ───
+    A3 --> B1
+    B3 -->|Approved| CI_FRONTEND & CI_BACKEND
+    B3 -->|Rejected| A1
+
+    C9 --> CD_DEV
+    D9 --> CD_DEV
+    E6 -.->|Env Ready| CD_DEV
+
+    F5 -->|Dev OK| CD_QA
+    G8 -->|Yes| APPROVAL
+    H4 -->|Granted| CD_PROD
+    H4 -->|Rejected| A1
+
+    I8 -->|Yes| MONITOR
+    I8 -->|No| J5
+
+    %% ─── STYLING ───
+    classDef devBox fill:#1e1e2e,stroke:#555,color:#cdd6f4
+    classDef ciBox fill:#1e3a5f,stroke:#4a90d9,color:#cfe8ff
+    classDef cdBox fill:#1a3a2a,stroke:#4caf87,color:#c8f0dc
+    classDef infraBox fill:#2e2a1e,stroke:#c9a227,color:#fff3cd
+    classDef approvalBox fill:#3a1e2e,stroke:#c94f7c,color:#ffd6e7
+    classDef monitorBox fill:#1e2e3a,stroke:#00bcd4,color:#b2ebf2
+    classDef failBox fill:#3a1e1e,stroke:#e53935,color:#ffcdd2
+    classDef okBox fill:#1a3a1a,stroke:#43a047,color:#c8f0c8
+
+    class A1,A2,A3 devBox
+    class C1,C2,C3,C4,C5,C6,C7,C8,C9 ciBox
+    class D1,D2,D3,D4,D5,D6,D7,D8,D9 ciBox
+    class F1,F2,F3,F4,F5 cdBox
+    class G1,G2,G3,G4,G5,G6,G7,G8 cdBox
+    class I1,I2,I3,I4,I5,I6,I7,I8 cdBox
+    class E1,E2,E3,E4,E5,E6 infraBox
+    class H1,H2,H3,H4 approvalBox
+    class J1,J2,J3,J4,J5,J6 monitorBox
+    class FAIL_FE,FAIL_BE,FAIL_QA,FAIL_INFRA failBox
+    class J7 okBox
