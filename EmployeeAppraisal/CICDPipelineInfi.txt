@@ -1,0 +1,36 @@
+Here's the full CI/CD pipeline flow. Here's a breakdown of each stage and the key decisions behind them:
+
+---
+
+**Developer Gate (PR Checks)**
+Every change begins with a feature branch and a Pull Request into `main` or a release branch. Peer code review is mandatory before any pipeline triggers, preventing bad code from ever entering the integration stream.
+
+---
+
+**Parallel CI Pipelines**
+The frontend and backend pipelines run in parallel since they are independently deployable — this reduces overall pipeline duration significantly for a 1,000-user enterprise app.
+
+- **Frontend (React + Vite):** Lint → Unit Test (Vitest) → 80% coverage gate → Production build → SAST scan → dependency audit → artifact packaging.
+- **Backend (.NET 8 Functions):** Restore → Build Release → xUnit tests → Integration tests via Testcontainers (spins up a real SQL instance in Docker) → SAST → publish & zip.
+
+---
+
+**Infrastructure Pipeline (IaC)**
+Bicep/Terraform changes run a separate pipeline with `What-If`/`plan` preview and a mandatory manual approval before `apply` is executed. This prevents accidental infrastructure drift.
+
+---
+
+**Environment Promotion (DEV → QA → PROD)**
+- **DEV** is auto-deployed on every green build — fast feedback for developers.
+- **QA/Staging** adds Playwright E2E tests, k6 load testing simulating 1,000 concurrent users, and OWASP ZAP DAST security scanning before promotion.
+- **PROD** requires a Change Advisory Board (CAB) approval and security sign-off, reflecting enterprise governance expectations.
+
+---
+
+**Zero-Downtime Production Deployment**
+A Blue-Green slot swap strategy is used — the app is deployed to a warm staging slot first, then swapped into production atomically. Azure CDN/Front Door cache is purged post-swap to ensure employees see the latest version immediately.
+
+---
+
+**Post-Deploy Monitoring & Auto-Rollback**
+Application Insights, Azure Monitor, and Service Bus dead-letter metrics are watched for anomalies after every release. If thresholds are breached, the pipeline automatically swaps the slot back to the previous version and pages the on-call team — minimising blast radius for 1,000 employees.
