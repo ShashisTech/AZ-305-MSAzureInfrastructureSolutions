@@ -1,0 +1,29 @@
+Generate detailed test cases for a eAppraisal. 
+Include:
+- Test Case ID
+- Objective
+- Preconditions
+- Test Steps
+- Expected Results
+- Actual Results (placeholder)
+- Status (Pass/Fail placeholder)
+
+Focus on both positive and negative scenarios, edge cases, and boundary conditions.
+
+
+
+Create a comprehensive test plan for a eAppraisal. 
+Include:
+- Introduction and objectives
+- Scope (in-scope and out-of-scope features)
+- Testing approach (manual/automation, functional/non-functional)
+- Test environment setup
+- Roles and responsibilities
+- Entry and exit criteria
+- Deliverables
+- Risk analysis and mitigation
+- Schedule and milestones
+
+
+
+
